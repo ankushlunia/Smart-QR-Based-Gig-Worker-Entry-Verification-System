@@ -34,16 +34,26 @@ export const DriverEntry: React.FC = () => {
   const [tokenCode, setTokenCode] = useState<string>('');
   const [tokenInfo, setTokenInfo] = useState<any>(null);
 
+  // Authenticated / Saved Driver from localStorage
+  const [savedDriver, setSavedDriver] = useState<Driver | null>(() => {
+    try {
+      const saved = localStorage.getItem('gatepass_driver');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Driver Data
-  const [phone, setPhone] = useState('9928388404');
-  const [name, setName] = useState('');
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [vehicleType, setVehicleType] = useState<VehicleType>('Motorcycle');
-  const [driverCompanies, setDriverCompanies] = useState<string[]>(['Swiggy']);
-  const [selectedCompany, setSelectedCompany] = useState<string>('Swiggy');
+  const [phone, setPhone] = useState(savedDriver?.phone || '');
+  const [name, setName] = useState(savedDriver?.name || '');
+  const [vehicleNumber, setVehicleNumber] = useState(savedDriver?.vehicleNumber || '');
+  const [vehicleType, setVehicleType] = useState<VehicleType>(savedDriver?.vehicleType || 'Motorcycle');
+  const [driverCompanies, setDriverCompanies] = useState<string[]>(savedDriver?.companies || ['Swiggy']);
+  const [selectedCompany, setSelectedCompany] = useState<string>(savedDriver?.companies?.[0] || 'Swiggy');
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
-  const [isReturning, setIsReturning] = useState(false);
-  const [driver, setDriver] = useState<Driver | null>(null);
+  const [isReturning, setIsReturning] = useState(!!savedDriver);
+  const [driver, setDriver] = useState<Driver | null>(savedDriver);
 
   // Geolocation
   const [lat, setLat] = useState<number | undefined>(undefined);
@@ -101,7 +111,13 @@ export const DriverEntry: React.FC = () => {
       if (data.valid) {
         setTokenInfo(data.token);
         setTokenCode(code);
-        setCurrentStep('phone');
+        
+        // Auto-skip phone & registration if driver is already registered/saved
+        if (savedDriver || (driver && name && phone)) {
+          setCurrentStep('selfie');
+        } else {
+          setCurrentStep('phone');
+        }
       } else {
         setErrorMessage(data.message || 'Invalid or expired QR token.');
         setCurrentStep('error');
@@ -112,6 +128,18 @@ export const DriverEntry: React.FC = () => {
     }
   };
 
+  const handleSwitchDriver = () => {
+    localStorage.removeItem('gatepass_driver');
+    setSavedDriver(null);
+    setDriver(null);
+    setIsReturning(false);
+    setName('');
+    setPhone('');
+    setVehicleNumber('');
+    setSelfieUrl(null);
+    setCurrentStep('phone');
+  };
+
   const handlePhoneLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (phone.length < 10) return;
@@ -120,11 +148,15 @@ export const DriverEntry: React.FC = () => {
       if (res.ok) {
         const d: Driver = await res.json();
         setDriver(d);
+        setSavedDriver(d);
         setName(d.name);
         setVehicleNumber(d.vehicleNumber);
         setVehicleType(d.vehicleType as any);
         setDriverCompanies(d.companies);
+        setSelectedCompany(d.companies?.[0] || 'Swiggy');
         setIsReturning(true);
+        // Persist session to browser
+        localStorage.setItem('gatepass_driver', JSON.stringify(d));
         // Returning driver → skip registration, go straight to selfie
         setCurrentStep('selfie');
       } else {
@@ -140,6 +172,23 @@ export const DriverEntry: React.FC = () => {
   const handleRegistrationDone = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !vehicleNumber || driverCompanies.length === 0) return;
+    
+    // Save partial profile locally
+    const newDriverObj: Driver = {
+      id: `driver_${Date.now()}`,
+      name,
+      phone,
+      vehicleNumber: vehicleNumber.toUpperCase(),
+      vehicleType,
+      companies: driverCompanies,
+      status: 'ACTIVE',
+      totalEntries: 1,
+      complaintCount: 0,
+      registeredAt: new Date().toISOString()
+    };
+    setDriver(newDriverObj);
+    setSavedDriver(newDriverObj);
+    localStorage.setItem('gatepass_driver', JSON.stringify(newDriverObj));
     setCurrentStep('selfie');
   };
 
@@ -231,14 +280,16 @@ export const DriverEntry: React.FC = () => {
 
   // ─── Progress ─────────────────────────────────────────
 
-  const stepsForType = isReturning
-    ? ['validate', 'phone', 'selfie', 'company', 'review', 'waiting', 'approved']
+  const stepsForType = (savedDriver || (driver && isReturning))
+    ? ['validate', 'selfie', 'company', 'review', 'waiting', 'approved']
     : ['validate', 'phone', 'register', 'selfie', 'company', 'review', 'waiting', 'approved'];
   const stepIdx = stepsForType.indexOf(currentStep);
   const progress = Math.min(100, ((stepIdx + 1) / stepsForType.length) * 100);
 
   // Available companies for this-visit selection
-  const availableCompanies = isReturning && driver ? driver.companies : (driverCompanies.length > 0 ? driverCompanies : COMPANIES as string[]);
+  const availableCompanies = (driver || savedDriver)?.companies && (driver || savedDriver)!.companies.length > 0
+    ? (driver || savedDriver)!.companies
+    : (driverCompanies.length > 0 ? driverCompanies : COMPANIES as string[]);
 
   // ─── Render ───────────────────────────────────────────
 
@@ -254,6 +305,27 @@ export const DriverEntry: React.FC = () => {
           <h1 className="text-xl font-extrabold text-white tracking-tight">Smart Campus Entry</h1>
           <p className="text-[11px] text-slate-500 font-mono">Digital Gate Pass for Gig Workers</p>
         </div>
+
+        {/* Persistent Driver Profile Pill (if remembered) */}
+        {(savedDriver || (driver && isReturning && name)) && (
+          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs animate-fadeIn shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <span>Driver:</span>
+                <strong className="text-white font-semibold">{name || savedDriver?.name}</strong>
+                <span className="text-[10px] text-slate-400 font-mono">({vehicleNumber || savedDriver?.vehicleNumber})</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSwitchDriver}
+              className="text-[11px] text-blue-400 hover:text-blue-300 underline font-semibold ml-2 transition"
+            >
+              Switch User
+            </button>
+          </div>
+        )}
 
         {/* Progress Bar */}
         {!['error', 'approved'].includes(currentStep) && (
