@@ -324,8 +324,55 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
   res.json(result);
 });
 
-app.get('/api/whatsapp/status', (req, res) => {
-  res.json(whatsappClient.getState());
+// 15b. Official 2FA Auth OTP
+app.post('/api/official/send-otp', async (req, res) => {
+  const { username, password, phone } = req.body;
+  const validOfficials = [
+    { username: 'admin', password: 'admin123', defaultPhone: '9928388404', name: 'Campus Security Director' },
+    { username: 'official', password: 'official123', defaultPhone: '9928388404', name: 'Campus Safety Admin' }
+  ];
+
+  const match = validOfficials.find(
+    o => o.username.toLowerCase() === (username || '').trim().toLowerCase() && o.password === password
+  );
+
+  if (!match) {
+    return res.status(401).json({ error: 'Invalid username or password. Please verify your credentials.' });
+  }
+
+  const targetPhone = (phone || match.defaultPhone).trim().replace(/\D/g, '');
+  if (targetPhone.length < 10) {
+    return res.status(400).json({ error: 'Valid 10-digit mobile number required for 2FA verification.' });
+  }
+
+  const otp = otpStore.generate(`official_${targetPhone}`);
+  await whatsappService.sendOTP(targetPhone, otp);
+
+  res.json({
+    success: true,
+    targetPhone,
+    officialName: match.name,
+    message: `2FA Verification code sent to WhatsApp +91 ${targetPhone.slice(-10)}`
+  });
+});
+
+app.post('/api/official/verify-otp', (req, res) => {
+  const { phone, otp, username } = req.body;
+  if (!phone || !otp) {
+    return res.status(400).json({ error: 'Phone and 6-digit OTP are required.' });
+  }
+
+  const cleanPhone = phone.trim().replace(/\D/g, '');
+  const isOtpValid = otpStore.verify(`official_${cleanPhone}`, otp);
+  if (!isOtpValid) {
+    return res.status(400).json({ error: 'Invalid or expired 2FA OTP code. Please try again.' });
+  }
+
+  res.json({
+    success: true,
+    message: 'Official 2FA authentication verified successfully.',
+    user: { username: username || 'admin', role: 'Security Administrator' }
+  });
 });
 
 // 16. Send WhatsApp OTP for Gig Worker Auth

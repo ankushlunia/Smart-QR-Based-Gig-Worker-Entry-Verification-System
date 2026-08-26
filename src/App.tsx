@@ -169,7 +169,7 @@ const AppShell: React.FC = () => {
 
             {/* GUARD LOGIN + PORTAL */}
             {screen === 'guard-login' && (
-              <GuardPortalWrapper onBack={() => setScreen('home')} />
+              <GuardPortal />
             )}
 
             {/* OTHER / GIG WORKER PORTAL */}
@@ -200,26 +200,6 @@ const AppShell: React.FC = () => {
         }
       />
     </Routes>
-  );
-};
-
-// ── Guard Portal Wrapper with back-to-home ─────────────
-const GuardPortalWrapper: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  return (
-    <div className="relative">
-      <div className="absolute top-4 left-4 z-50">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition group bg-slate-900/80 backdrop-blur px-3 py-1.5 rounded-xl border border-slate-800"
-        >
-          <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          <span>Back</span>
-        </button>
-      </div>
-      <GuardPortal />
-    </div>
   );
 };
 
