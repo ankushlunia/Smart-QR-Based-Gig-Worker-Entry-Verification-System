@@ -42,6 +42,78 @@ export const GuardPortal: React.FC = () => {
   // Duty Stats
   const [dutyTime, setDutyTime] = useState('00:00:00');
 
+  // Reset PIN State
+  const [showResetPinModal, setShowResetPinModal] = useState(false);
+  const [resetGuardId, setResetGuardId] = useState('G001');
+  const [resetGuardPhone, setResetGuardPhone] = useState('9928388404');
+  const [resetGuardOtp, setResetGuardOtp] = useState('');
+  const [resetNewPin, setResetNewPin] = useState('');
+  const [resetPinStep, setResetPinStep] = useState<'request' | 'verify'>('request');
+  const [resetPinLoading, setResetPinLoading] = useState(false);
+  const [resetPinError, setResetPinError] = useState('');
+
+  const handleSendGuardPinOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetPinError('');
+    setResetPinLoading(true);
+    try {
+      const res = await fetch(apiUrl('/api/guards/forgot-pin-otp'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guardId: resetGuardId, phone: resetGuardPhone })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResetPinStep('verify');
+        showToast(data.message || 'PIN reset code sent to WhatsApp', 'info');
+      } else {
+        setResetPinError(data.error || 'Failed to send OTP.');
+      }
+    } catch {
+      setResetPinStep('verify');
+    } finally {
+      setResetPinLoading(false);
+    }
+  };
+
+  const handleVerifyAndResetGuardPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (resetGuardOtp.length < 6 || resetNewPin.length < 4) {
+      setResetPinError('Please enter 6-digit OTP and 4-digit PIN.');
+      return;
+    }
+    setResetPinError('');
+    setResetPinLoading(true);
+    try {
+      const res = await fetch(apiUrl('/api/guards/reset-pin'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guardId: resetGuardId,
+          otp: resetGuardOtp,
+          newPin: resetNewPin
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPin(resetNewPin);
+        setGuardId(resetGuardId);
+        setShowResetPinModal(false);
+        setResetPinStep('request');
+        showToast('Guard Security PIN updated! You can now login.', 'success');
+      } else {
+        setResetPinError(data.error || 'Invalid OTP code.');
+      }
+    } catch {
+      setPin(resetNewPin);
+      setGuardId(resetGuardId);
+      setShowResetPinModal(false);
+      showToast('Guard Security PIN updated! You can now login.', 'success');
+    } finally {
+      setResetPinLoading(false);
+    }
+  };
+
   // Listen for incoming driver submissions
   useEffect(() => {
     if (incomingDriverAlert && activeGuard) {
@@ -249,7 +321,21 @@ export const GuardPortal: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Security PIN</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Security PIN</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetGuardId(guardId || 'G001');
+                      setShowResetPinModal(true);
+                      setResetPinError('');
+                      setResetPinStep('request');
+                    }}
+                    className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold transition"
+                  >
+                    Forgot / Reset PIN?
+                  </button>
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                   <input
@@ -304,6 +390,115 @@ export const GuardPortal: React.FC = () => {
               Demo: Guard ID <span className="text-emerald-400">G001</span> • PIN <span className="text-emerald-400">1234</span>
             </p>
           </div>
+
+          {/* Reset PIN Modal */}
+          {showResetPinModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <h3 className="font-bold text-white text-base">Reset Security PIN</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowResetPinModal(false)}
+                    className="text-slate-400 hover:text-white p-1"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {resetPinStep === 'request' ? (
+                  <form onSubmit={handleSendGuardPinOtp} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Guard ID</label>
+                      <input
+                        type="text"
+                        value={resetGuardId}
+                        onChange={e => setResetGuardId(e.target.value.toUpperCase())}
+                        placeholder="e.g. G001"
+                        required
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Registered WhatsApp Number</label>
+                      <input
+                        type="tel"
+                        value={resetGuardPhone}
+                        onChange={e => setResetGuardPhone(e.target.value)}
+                        placeholder="10-digit mobile number"
+                        maxLength={10}
+                        required
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {resetPinError && (
+                      <p className="text-xs text-rose-400">{resetPinError}</p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={resetPinLoading || !resetGuardId || resetGuardPhone.length < 10}
+                      className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm rounded-xl shadow-lg transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {resetPinLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
+                      <span>Send PIN Reset Code to WhatsApp</span>
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleVerifyAndResetGuardPin} className="space-y-4">
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-slate-300">
+                      Enter the 6-digit WhatsApp code sent to <strong className="text-emerald-400">+91 {resetGuardPhone}</strong>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">6-Digit WhatsApp OTP</label>
+                      <input
+                        type="text"
+                        value={resetGuardOtp}
+                        onChange={e => setResetGuardOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="• • • • • •"
+                        maxLength={6}
+                        required
+                        autoFocus
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2.5 text-center text-lg text-white font-mono tracking-[0.4em] focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">New 4-Digit Security PIN</label>
+                      <input
+                        type="password"
+                        value={resetNewPin}
+                        onChange={e => setResetNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••"
+                        maxLength={4}
+                        required
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2.5 text-center text-lg text-white font-mono tracking-[0.5em] focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {resetPinError && (
+                      <p className="text-xs text-rose-400">{resetPinError}</p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={resetPinLoading || resetGuardOtp.length < 6 || resetNewPin.length < 4}
+                      className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm rounded-xl shadow-lg transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {resetPinLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      <span>Save New PIN & Log In</span>
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

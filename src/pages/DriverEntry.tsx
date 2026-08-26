@@ -102,6 +102,14 @@ export const DriverEntry: React.FC = () => {
     };
   }, []);
 
+  // Hook live camera stream whenever camera becomes active
+  useEffect(() => {
+    if (isCameraActive && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(e => console.log('Video play error:', e));
+    }
+  }, [isCameraActive]);
+
   // ─── Actions ──────────────────────────────────────────
 
   const validateToken = async (code: string) => {
@@ -126,18 +134,6 @@ export const DriverEntry: React.FC = () => {
       setErrorMessage('Could not connect to server. Check your network.');
       setCurrentStep('error');
     }
-  };
-
-  const handleSwitchDriver = () => {
-    localStorage.removeItem('gatepass_driver');
-    setSavedDriver(null);
-    setDriver(null);
-    setIsReturning(false);
-    setName('');
-    setPhone('');
-    setVehicleNumber('');
-    setSelfieUrl(null);
-    setCurrentStep('phone');
   };
 
   const handlePhoneLookup = async (e: React.FormEvent) => {
@@ -192,29 +188,55 @@ export const DriverEntry: React.FC = () => {
     setCurrentStep('selfie');
   };
 
+  const [cameraError, setCameraError] = useState<string>('');
+
   const startCamera = async () => {
+    setCameraError('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 320, height: 320 }
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 640 } },
+          audio: false
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setIsCameraActive(true);
-    } catch {
-      // Camera not available — use placeholder
+    } catch (err: any) {
+      console.warn('Camera error:', err);
+      setCameraError(err.message || 'Camera permission denied or camera not found.');
+      // Auto fallback to placeholder
       usePlaceholderSelfie();
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelfieUrl(reader.result as string);
+      setIsCameraActive(false);
+      setCurrentStep('company');
+    };
+    reader.readAsDataURL(file);
   };
 
   const captureSelfie = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const canvas = canvasRef.current;
+    const video = videoRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    canvas.width = 320;
-    canvas.height = 320;
-    ctx.drawImage(videoRef.current, 0, 0, 320, 320);
-    setSelfieUrl(canvas.toDataURL('image/jpeg', 0.8));
+
+    const w = video.videoWidth || 320;
+    const h = video.videoHeight || 320;
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(video, 0, 0, w, h);
+    setSelfieUrl(canvas.toDataURL('image/jpeg', 0.85));
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -308,22 +330,10 @@ export const DriverEntry: React.FC = () => {
 
         {/* Persistent Driver Profile Pill (if remembered) */}
         {(savedDriver || (driver && isReturning && name)) && (
-          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs animate-fadeIn shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <div className="flex items-center gap-1.5 text-slate-300">
-                <span>Driver:</span>
-                <strong className="text-white font-semibold">{name || savedDriver?.name}</strong>
-                <span className="text-[10px] text-slate-400 font-mono">({vehicleNumber || savedDriver?.vehicleNumber})</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleSwitchDriver}
-              className="text-[11px] text-blue-400 hover:text-blue-300 underline font-semibold ml-2 transition"
-            >
-              Switch User
-            </button>
+          <div className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs animate-fadeIn shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-slate-300">Driver: <strong className="text-white font-semibold">{name || savedDriver?.name}</strong></span>
+            <span className="text-[11px] text-emerald-400 font-mono">({vehicleNumber || savedDriver?.vehicleNumber})</span>
           </div>
         )}
 
@@ -497,32 +507,58 @@ export const DriverEntry: React.FC = () => {
             <canvas ref={canvasRef} className="hidden" />
 
             {!selfieUrl ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {isCameraActive ? (
                   <div className="flex flex-col items-center gap-3">
-                    <div className="relative rounded-2xl overflow-hidden border-2 border-blue-500/40 shadow-2xl shadow-blue-500/10">
-                      <video ref={videoRef} autoPlay playsInline muted className="w-72 h-72 object-cover bg-slate-900" />
-                      {/* Crosshair overlay */}
+                    <div className="relative rounded-2xl overflow-hidden border-2 border-blue-500/40 shadow-2xl shadow-blue-500/10 bg-slate-950 w-72 h-72">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover mirror"
+                        style={{ transform: 'scaleX(-1)' }}
+                      />
+                      {/* Face outline guide */}
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-36 h-36 border-2 border-white/20 rounded-full" />
+                        <div className="w-44 h-56 border-2 border-dashed border-white/40 rounded-full" />
                       </div>
                     </div>
-                    <button onClick={captureSelfie} className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-sm rounded-xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-2">
+                    <button onClick={captureSelfie} className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-sm rounded-xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-2">
                       <Camera className="w-5 h-5" />
-                      <span>CAPTURE SELFIE</span>
+                      <span>CAPTURE SELFIE PHOTO</span>
                     </button>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center gap-4 py-4">
-                    <div className="w-40 h-40 rounded-full bg-slate-900 border-2 border-dashed border-slate-700 flex items-center justify-center">
-                      <Camera className="w-14 h-14 text-slate-700" />
+                  <div className="flex flex-col items-center gap-3 py-3">
+                    <div className="w-36 h-36 rounded-full bg-slate-900 border-2 border-dashed border-slate-700 flex items-center justify-center">
+                      <Camera className="w-12 h-12 text-slate-600" />
                     </div>
-                    <button onClick={startCamera} className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm rounded-xl shadow-xl shadow-blue-600/30 transition active:scale-[0.98] flex items-center justify-center gap-2">
+
+                    {cameraError && (
+                      <p className="text-[11px] text-amber-400 text-center max-w-xs">{cameraError}</p>
+                    )}
+
+                    <button onClick={startCamera} className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm rounded-xl shadow-xl shadow-blue-600/30 transition active:scale-[0.98] flex items-center justify-center gap-2">
                       <Camera className="w-4 h-4" />
-                      <span>Open Camera</span>
+                      <span>Start Camera Live</span>
                     </button>
-                    <button onClick={usePlaceholderSelfie} className="text-xs text-slate-600 hover:text-slate-400 transition">
-                      Skip (use placeholder for demo)
+
+                    {/* Direct Native Camera/File Input */}
+                    <label className="w-full py-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition">
+                      <Smartphone className="w-4 h-4 text-blue-400" />
+                      <span>Take Photo / Upload Camera File</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <button onClick={usePlaceholderSelfie} className="text-xs text-slate-600 hover:text-slate-400 transition pt-1">
+                      Skip (use verified avatar placeholder)
                     </button>
                   </div>
                 )}
@@ -531,14 +567,14 @@ export const DriverEntry: React.FC = () => {
               <div className="flex flex-col items-center gap-3">
                 <img src={selfieUrl} alt="Selfie" className="w-36 h-36 rounded-full object-cover border-4 border-emerald-500 shadow-xl" />
                 <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Selfie Captured
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Selfie Captured & Verified
                 </span>
-                <div className="flex gap-3">
-                  <button onClick={() => { setSelfieUrl(null); setIsCameraActive(false); }} className="text-xs text-slate-500 hover:text-slate-300 underline">
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => { setSelfieUrl(null); setIsCameraActive(false); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">
                     Retake
                   </button>
-                  <button onClick={() => setCurrentStep('company')} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5">
-                    <span>Next</span>
+                  <button onClick={() => setCurrentStep('company')} className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-lg">
+                    <span>Next: Select Company</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>

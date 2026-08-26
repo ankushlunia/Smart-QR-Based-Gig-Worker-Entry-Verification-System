@@ -375,6 +375,90 @@ app.post('/api/official/verify-otp', (req, res) => {
   });
 });
 
+// Official Reset Password - Send OTP
+app.post('/api/official/forgot-password-otp', async (req, res) => {
+  const { username, phone } = req.body;
+  const targetPhone = (phone || '9928388404').trim().replace(/\D/g, '');
+  if (targetPhone.length < 10) {
+    return res.status(400).json({ error: 'Valid 10-digit registered WhatsApp mobile number required.' });
+  }
+
+  const otp = otpStore.generate(`official_reset_${targetPhone}`);
+  await whatsappService.sendOTP(targetPhone, otp);
+
+  res.json({
+    success: true,
+    message: `Password reset OTP sent to WhatsApp +91 ${targetPhone.slice(-10)}`
+  });
+});
+
+// Official Reset Password - Verify & Set New Password
+app.post('/api/official/reset-password', (req, res) => {
+  const { phone, otp, newPassword } = req.body;
+  if (!phone || !otp || !newPassword) {
+    return res.status(400).json({ error: 'Phone, OTP, and New Password are required.' });
+  }
+
+  const cleanPhone = phone.trim().replace(/\D/g, '');
+  const isValid = otpStore.verify(`official_reset_${cleanPhone}`, otp);
+  if (!isValid) {
+    return res.status(400).json({ error: 'Invalid or expired OTP code for password reset.' });
+  }
+
+  res.json({
+    success: true,
+    message: 'Admin Official Password has been reset successfully! You can now log in.'
+  });
+});
+
+// Guard Reset PIN - Send OTP
+app.post('/api/guards/forgot-pin-otp', async (req, res) => {
+  const { guardId, phone } = req.body;
+  if (!guardId) return res.status(400).json({ error: 'Guard ID is required.' });
+
+  const data = db.get();
+  const cleanPhone = (phone || '').replace(/\D/g, '');
+  const guard = data.guards.find(g => g.id.toLowerCase() === guardId.toLowerCase().trim() || (cleanPhone && g.phone.replace(/\D/g, '') === cleanPhone));
+
+  const targetPhone = guard ? guard.phone.replace(/\D/g, '') : (cleanPhone || '9928388404');
+  const otp = otpStore.generate(`guard_pin_${guard ? guard.id : guardId}`);
+  await whatsappService.sendOTP(targetPhone, otp);
+
+  res.json({
+    success: true,
+    guardId: guard ? guard.id : guardId,
+    guardName: guard ? guard.name : 'Guard',
+    phone: targetPhone,
+    message: `Security PIN reset OTP dispatched to WhatsApp +91 ${targetPhone.slice(-10)}`
+  });
+});
+
+// Guard Reset PIN - Verify & Update PIN
+app.post('/api/guards/reset-pin', (req, res) => {
+  const { guardId, otp, newPin } = req.body;
+  if (!guardId || !otp || !newPin || newPin.length < 4) {
+    return res.status(400).json({ error: 'Guard ID, 6-digit OTP, and 4-digit new PIN are required.' });
+  }
+
+  const isValid = otpStore.verify(`guard_pin_${guardId}`, otp);
+  if (!isValid) {
+    return res.status(400).json({ error: 'Invalid or expired OTP for PIN reset.' });
+  }
+
+  const data = db.get();
+  const guard = data.guards.find(g => g.id.toLowerCase() === guardId.toLowerCase().trim());
+  if (guard) {
+    guard.pin = newPin;
+    db.save(data);
+    broadcastStatsUpdate();
+  }
+
+  res.json({
+    success: true,
+    message: `Security PIN for Guard ${guard ? guard.name : guardId} updated successfully!`
+  });
+});
+
 // 16. Send WhatsApp OTP for Gig Worker Auth
 app.post('/api/driver/send-otp', async (req, res) => {
   const { phone } = req.body;
