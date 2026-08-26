@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Driver, Entry, DeliveryCompany, VehicleType } from '../types';
 import { useApp } from '../context/AppContext';
+import { apiUrl } from '../utils/api';
 
 const COMPANIES: DeliveryCompany[] = [
   'Swiggy', 'Zomato', 'Amazon', 'Uber', 'Ola', 'Blinkit', 'Zepto', 'Porter', 'Delhivery', 'Other'
@@ -91,7 +92,7 @@ export const DriverPortal: React.FC<DriverPortalProps> = ({ onBack }) => {
   // Fetch driver history when authenticated
   const fetchDriverHistory = async (phoneNum: string) => {
     try {
-      const res = await fetch(`/api/driver/history/${phoneNum}`);
+      const res = await fetch(apiUrl(`/api/driver/history/${phoneNum}`));
       if (res.ok) {
         const data = await res.json();
         setEntriesHistory(data);
@@ -114,7 +115,7 @@ export const DriverPortal: React.FC<DriverPortalProps> = ({ onBack }) => {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/driver/send-otp', {
+      const res = await fetch(apiUrl('/api/driver/send-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: cleanPhone })
@@ -162,7 +163,7 @@ export const DriverPortal: React.FC<DriverPortalProps> = ({ onBack }) => {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/driver/verify-otp', {
+      const res = await fetch(apiUrl('/api/driver/verify-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +199,7 @@ export const DriverPortal: React.FC<DriverPortalProps> = ({ onBack }) => {
   const handleUpdateVehicle = async () => {
     if (!authenticatedDriver) return;
     try {
-      const res = await fetch(`/api/driver/profile/${authenticatedDriver.id}`, {
+      const res = await fetch(apiUrl(`/api/driver/profile/${authenticatedDriver.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -232,7 +233,7 @@ export const DriverPortal: React.FC<DriverPortalProps> = ({ onBack }) => {
     }
 
     try {
-      const res = await fetch(`/api/driver/profile/${authenticatedDriver.id}`, {
+      const res = await fetch(apiUrl(`/api/driver/profile/${authenticatedDriver.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companies: newCompanies })

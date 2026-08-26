@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { DashboardStats, Guard, Gate, DutySession, Entry } from '../types';
 import { sounds } from '../utils/audio';
+import { apiUrl, getSocketUrl } from '../utils/api';
 
 interface AppContextType {
   socket: Socket | null;
@@ -61,13 +62,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshData = async () => {
     try {
       const [statsRes, guardsRes, gatesRes] = await Promise.all([
-        fetch('/api/admin/dashboard').then(r => r.json()),
-        fetch('/api/guards').then(r => r.json()),
-        fetch('/api/gates').then(r => r.json())
+        fetch(apiUrl('/api/admin/dashboard')).then(r => r.json()),
+        fetch(apiUrl('/api/guards')).then(r => r.json()),
+        fetch(apiUrl('/api/gates')).then(r => r.json())
       ]);
-      setStats(statsRes);
-      setGuards(guardsRes);
-      setGates(gatesRes);
+      if (statsRes) setStats(statsRes);
+      if (Array.isArray(guardsRes)) setGuards(guardsRes);
+      if (Array.isArray(gatesRes)) setGates(gatesRes);
     } catch (err) {
       console.error('Error refreshing app data:', err);
     }
@@ -75,7 +76,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     // Connect Socket.IO
-    const socketUrl = window.location.origin;
+    const socketUrl = getSocketUrl();
     const newSocket = io(socketUrl, {
       reconnectionAttempts: 10,
       timeout: 10000
@@ -114,7 +115,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loginGuard = async (guardId: string, pin: string, gateId: string): Promise<boolean> => {
     try {
-      const res = await fetch('/api/auth/guard-login', {
+      const res = await fetch(apiUrl('/api/auth/guard-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guardId, pin, gateId })
@@ -139,7 +140,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return false;
       }
     } catch (err) {
-      showToast('Network error logging in guard', 'warning');
+      showToast('Network error logging in guard. Check backend connection.', 'warning');
       return false;
     }
   };

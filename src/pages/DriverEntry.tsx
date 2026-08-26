@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { Driver, DeliveryCompany } from '../types';
+import { Driver, DeliveryCompany, VehicleType } from '../types';
+import { apiUrl, getSocketUrl } from '../utils/api';
 
 type Step = 'validate' | 'phone' | 'register' | 'selfie' | 'company' | 'review' | 'waiting' | 'approved' | 'error';
 
@@ -26,47 +27,41 @@ const COMPANY_LOGOS: Record<string, string> = {
 
 export const DriverEntry: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const tokenFromUrl = searchParams.get('token') || '';
+  const tokenFromUrl = searchParams.get('token');
 
-  // Step
+  // Form Flow State
   const [currentStep, setCurrentStep] = useState<Step>('validate');
-  const [errorMessage, setErrorMessage] = useState('');
-
-  // Token
-  const [tokenCode, setTokenCode] = useState(tokenFromUrl);
+  const [tokenCode, setTokenCode] = useState<string>('');
   const [tokenInfo, setTokenInfo] = useState<any>(null);
 
-  // Driver
-  const [phone, setPhone] = useState('');
-  const [driver, setDriver] = useState<Driver | null>(null);
-  const [isReturning, setIsReturning] = useState(false);
-
-  // Registration fields (new drivers only)
+  // Driver Data
+  const [phone, setPhone] = useState('9928388404');
   const [name, setName] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
-  const [vehicleType, setVehicleType] = useState('Motorcycle');
-  const [driverCompanies, setDriverCompanies] = useState<string[]>([]);
-
-  // Selfie
+  const [vehicleType, setVehicleType] = useState<VehicleType>('Motorcycle');
+  const [driverCompanies, setDriverCompanies] = useState<string[]>(['Swiggy']);
+  const [selectedCompany, setSelectedCompany] = useState<string>('Swiggy');
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const [isReturning, setIsReturning] = useState(false);
+  const [driver, setDriver] = useState<Driver | null>(null);
 
-  // Company for this visit
-  const [selectedCompany, setSelectedCompany] = useState('');
-
-  // Location
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
+  // Geolocation
+  const [lat, setLat] = useState<number | undefined>(undefined);
+  const [lng, setLng] = useState<number | undefined>(undefined);
   const [locationVerified, setLocationVerified] = useState(false);
 
-  // Submission
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Flow Tracking
   const [submittedEntryId, setSubmittedEntryId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auto-validate token from URL
+  // Camera Refs
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Auto-trigger token validate if in URL
   useEffect(() => {
     if (tokenFromUrl) validateToken(tokenFromUrl);
   }, [tokenFromUrl]);
@@ -74,7 +69,7 @@ export const DriverEntry: React.FC = () => {
   // Listen for guard decision
   useEffect(() => {
     if (!submittedEntryId) return;
-    const socket = io(window.location.origin);
+    const socket = io(getSocketUrl());
     socket.on('entry_decision_updated', (data: any) => {
       if (data.entry?.id === submittedEntryId) {
         if (data.entry.status === 'ACCEPTED') {
@@ -101,7 +96,7 @@ export const DriverEntry: React.FC = () => {
 
   const validateToken = async (code: string) => {
     try {
-      const res = await fetch(`/api/qr/validate/${code}`);
+      const res = await fetch(apiUrl(`/api/qr/validate/${code}`));
       const data = await res.json();
       if (data.valid) {
         setTokenInfo(data.token);
@@ -121,13 +116,13 @@ export const DriverEntry: React.FC = () => {
     e.preventDefault();
     if (phone.length < 10) return;
     try {
-      const res = await fetch(`/api/driver/lookup/${phone}`);
+      const res = await fetch(apiUrl(`/api/driver/lookup/${phone}`));
       if (res.ok) {
         const d: Driver = await res.json();
         setDriver(d);
         setName(d.name);
         setVehicleNumber(d.vehicleNumber);
-        setVehicleType(d.vehicleType);
+        setVehicleType(d.vehicleType as any);
         setDriverCompanies(d.companies);
         setIsReturning(true);
         // Returning driver → skip registration, go straight to selfie
@@ -206,7 +201,7 @@ export const DriverEntry: React.FC = () => {
   const handleSubmitEntry = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/entry/submit', {
+      const res = await fetch(apiUrl('/api/entry/submit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -355,7 +350,7 @@ export const DriverEntry: React.FC = () => {
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Vehicle Type</label>
-                <select value={vehicleType} onChange={e => setVehicleType(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                <select value={vehicleType} onChange={e => setVehicleType(e.target.value as VehicleType)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500">
                   <option value="Motorcycle">Motorcycle</option>
                   <option value="Scooter">Scooter</option>
                   <option value="Bicycle">Bicycle</option>

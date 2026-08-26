@@ -7,6 +7,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { Entry } from '../types';
 import { sounds } from '../utils/audio';
+import { apiUrl } from '../utils/api';
 
 export const GuardPortal: React.FC = () => {
   const {
@@ -95,7 +96,7 @@ export const GuardPortal: React.FC = () => {
     if (!activeDutySession) return;
     setIsGenerating(true);
     try {
-      const res = await fetch('/api/qr/generate', {
+      const res = await fetch(apiUrl('/api/qr/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dutySessionId: activeDutySession.id })
@@ -154,7 +155,7 @@ export const GuardPortal: React.FC = () => {
 
     setIsVerifying(true);
     try {
-      const res = await fetch('/api/entry/verify', {
+      const res = await fetch(apiUrl('/api/entry/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entryId: pendingEntry.id, decision: 'ACCEPT' })
@@ -180,7 +181,7 @@ export const GuardPortal: React.FC = () => {
     if (!pendingEntry || !complaintReason) return;
     setIsVerifying(true);
     try {
-      const res = await fetch('/api/entry/verify', {
+      const res = await fetch(apiUrl('/api/entry/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

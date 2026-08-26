@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { Driver, Guard, Entry, Complaint, DutySession, QRToken, DeliveryCompany } from '../types';
+import { apiUrl } from '../utils/api';
 
 export const AdminDashboard: React.FC = () => {
   const { stats, guards, gates, refreshData, showToast } = useApp();
@@ -39,7 +40,7 @@ export const AdminDashboard: React.FC = () => {
 
   const fetchWaStatus = async () => {
     try {
-      const res = await fetch('/api/whatsapp/status');
+      const res = await fetch(apiUrl('/api/whatsapp/status'));
       if (res.ok) {
         const data = await res.json();
         setWaStatus(data);
@@ -57,7 +58,7 @@ export const AdminDashboard: React.FC = () => {
     if (!confirm('Are you sure you want to disconnect WhatsApp device +91 9928388404?')) return;
     setIsWaLoading(true);
     try {
-      const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
+      const res = await fetch(apiUrl('/api/whatsapp/disconnect'), { method: 'POST' });
       if (res.ok) {
         showToast('WhatsApp device disconnected', 'info');
         setWaPairingCode(null);
@@ -73,7 +74,7 @@ export const AdminDashboard: React.FC = () => {
   const handleGetWaPairingCode = async () => {
     setIsWaLoading(true);
     try {
-      const res = await fetch('/api/whatsapp/pairing-code', {
+      const res = await fetch(apiUrl('/api/whatsapp/pairing-code'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: waPhoneToLink })
@@ -97,11 +98,11 @@ export const AdminDashboard: React.FC = () => {
     setLoading(true);
     try {
       const [entriesRes, driversRes, complaintsRes, dutyRes, tokensRes] = await Promise.all([
-        fetch('/api/entries').then(r => r.json()),
-        fetch('/api/drivers').then(r => r.json()),
-        fetch('/api/complaints').then(r => r.json()),
-        fetch('/api/duty-sessions').then(r => r.json()),
-        fetch('/api/qr/history').then(r => r.json())
+        fetch(apiUrl('/api/entries')).then(r => r.json()),
+        fetch(apiUrl('/api/drivers')).then(r => r.json()),
+        fetch(apiUrl('/api/complaints')).then(r => r.json()),
+        fetch(apiUrl('/api/duty-sessions')).then(r => r.json()),
+        fetch(apiUrl('/api/qr/history')).then(r => r.json())
       ]);
       setEntries(entriesRes);
       setDrivers(driversRes);
@@ -123,7 +124,7 @@ export const AdminDashboard: React.FC = () => {
   const handleAddGuard = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/guards', {
+      const res = await fetch(apiUrl('/api/guards'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newGuardData)
@@ -143,7 +144,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleToggleDriverSuspension = async (driverId: string) => {
     try {
-      const res = await fetch(`/api/drivers/${driverId}/status`, { method: 'PATCH' });
+      const res = await fetch(apiUrl(`/api/drivers/${driverId}/status`), { method: 'PATCH' });
       if (res.ok) {
         showToast('Driver status updated!', 'info');
         fetchAllData();
@@ -155,7 +156,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleUpdateComplaintStatus = async (complaintId: string, newStatus: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED') => {
     try {
-      const res = await fetch(`/api/complaints/${complaintId}/status`, {
+      const res = await fetch(apiUrl(`/api/complaints/${complaintId}/status`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })

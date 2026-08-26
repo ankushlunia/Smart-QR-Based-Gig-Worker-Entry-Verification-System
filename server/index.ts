@@ -3,7 +3,16 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { db } from './db.js';
+import { otpStore } from './otpStore.js';
+import { whatsappService } from './whatsapp.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.resolve(__dirname, '../dist');
 
 const app = express();
 const server = http.createServer(app);
@@ -319,15 +328,6 @@ app.get('/api/whatsapp/status', (req, res) => {
   res.json(whatsappClient.getState());
 });
 
-const PORT = process.env.PORT || 5001;
-initWhatsAppClient();
-server.listen(PORT, () => {
-  console.log(`🚀 Smart Campus Entry Backend Server running on http://localhost:${PORT}`);
-});
-
-import { otpStore } from './otpStore.js';
-import { whatsappService } from './whatsapp.js';
-
 // 16. Send WhatsApp OTP for Gig Worker Auth
 app.post('/api/driver/send-otp', async (req, res) => {
   const { phone } = req.body;
@@ -407,4 +407,21 @@ app.patch('/api/driver/profile/:id', (req, res) => {
   db.save(data);
   broadcastStatsUpdate();
   res.json(driver);
+});
+
+// Static frontend serving (for single-service deployment e.g. Render / Railway)
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
+const PORT = process.env.PORT || 5001;
+initWhatsAppClient();
+server.listen(PORT, () => {
+  console.log(`🚀 Smart Campus Entry Backend Server running on port ${PORT}`);
 });

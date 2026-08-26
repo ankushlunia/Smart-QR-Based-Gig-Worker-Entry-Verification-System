@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Shield, ShieldAlert, Smartphone, LayoutDashboard, Zap, Sparkles, Radio } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { apiUrl } from '../utils/api';
 
 export const RoleNav: React.FC = () => {
   const location = useLocation();
@@ -21,7 +22,7 @@ export const RoleNav: React.FC = () => {
   const handleSimulateQuickEntry = async () => {
     setIsSimulating(true);
     try {
-      const res = await fetch('/api/demo/simulate-entry', { method: 'POST' });
+      const res = await fetch(apiUrl('/api/demo/simulate-entry'), { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         showToast(`🚀 Demo Entry Simulated! Driver: ${data.entry.driverName} (${data.entry.company})`, 'success');
