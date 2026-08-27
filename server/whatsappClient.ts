@@ -87,33 +87,41 @@ export async function initWhatsAppClient() {
 export const whatsappClient = {
   getState: () => state,
 
-  generateQR: async (): Promise<{ qrCodeDataUrl: string }> => {
-    if (state.qrCodeDataUrl) {
-      return { qrCodeDataUrl: state.qrCodeDataUrl };
-    }
+  generateQR: async (): Promise<{ qrCodeDataUrl: string | null; error?: string }> => {
     try {
-      // Re-trigger client connection to generate fresh Baileys QR
-      if (socket && !state.isConnected) {
+      state.qrCodeDataUrl = null;
+      if (socket) {
         try {
-          await socket.ev.removeAllListeners();
+          await socket.logout();
+        } catch (e) {}
+        try {
+          socket.ev.removeAllListeners();
           socket.end(undefined);
         } catch (e) {}
-        initWhatsAppClient();
+        socket = null;
       }
-      // Generate immediate fallback QR code link for WhatsApp
-      const fallbackUrl = `https://wa.me/qr/GATEPASS_${Date.now()}`;
-      const qrUrl = await QRCode.toDataURL(fallbackUrl, {
-        errorCorrectionLevel: 'M',
-        margin: 3,
-        scale: 8,
-        color: { dark: '#0b0f17', light: '#ffffff' }
-      });
-      state.qrCodeDataUrl = qrUrl;
-      return { qrCodeDataUrl: qrUrl };
-    } catch (err) {
-      const defaultQr = await QRCode.toDataURL('WHATSAPP_GATEWAY_LINK_9928388404');
-      state.qrCodeDataUrl = defaultQr;
-      return { qrCodeDataUrl: defaultQr };
+
+      if (fs.existsSync(AUTH_DIR)) {
+        fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+      }
+
+      await initWhatsAppClient();
+
+      // Poll for up to 6 seconds for Baileys to generate authentic QR code
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 200));
+        if (state.qrCodeDataUrl) {
+          return { qrCodeDataUrl: state.qrCodeDataUrl };
+        }
+      }
+
+      if (state.qrCodeDataUrl) {
+        return { qrCodeDataUrl: state.qrCodeDataUrl };
+      }
+
+      return { qrCodeDataUrl: null, error: 'WhatsApp QR code is taking longer to generate. Please try again or use Method 1 (Pairing Code).' };
+    } catch (err: any) {
+      return { qrCodeDataUrl: null, error: err.message || 'Failed to generate QR code' };
     }
   },
 
