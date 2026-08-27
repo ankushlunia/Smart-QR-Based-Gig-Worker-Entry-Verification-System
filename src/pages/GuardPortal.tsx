@@ -2,25 +2,30 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Shield, QrCode, Clock, CheckCircle2, AlertTriangle, LogOut, User,
   Smartphone, MapPin, Car, Phone, RefreshCw, X, ChevronRight, Truck,
-  Radio, Fingerprint, Lock, Eye, Building2
+  Radio, Fingerprint, Lock, Eye, Building2, ArrowLeft, KeyRound, MessageSquare
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Entry } from '../types';
 import { sounds } from '../utils/audio';
 import { apiUrl } from '../utils/api';
 
-export const GuardPortal: React.FC = () => {
+export const GuardPortal: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const {
     activeGuard, activeDutySession, gates, loginGuard, logoutGuard,
     incomingDriverAlert, setIncomingDriverAlert, showToast, refreshData, socket
   } = useApp();
 
   // Login State
+  const [loginStep, setLoginStep] = useState<'credentials' | 'otp'>('credentials');
   const [guardId, setGuardId] = useState('G001');
   const [pin, setPin] = useState('1234');
   const [gateId, setGateId] = useState('gate-1');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [guardOtp, setGuardOtp] = useState('');
+  const [guardOtpPhone, setGuardOtpPhone] = useState('');
+  const [guardName2fa, setGuardName2fa] = useState('');
+  const [otpResendTimer, setOtpResendTimer] = useState(0);
 
   // QR State
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
@@ -153,13 +158,71 @@ export const GuardPortal: React.FC = () => {
     }
   }, [tokenExpiry]);
 
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (loginStep === 'otp' && otpResendTimer > 0) {
+      interval = setInterval(() => setOtpResendTimer(t => t - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [loginStep, otpResendTimer]);
+
+  // Step 1: Verify PIN credentials, then send WhatsApp OTP
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setIsLoggingIn(true);
-    const success = await loginGuard(guardId, pin, gateId);
-    if (!success) {
-      setLoginError('Invalid Guard ID or PIN. Please try again.');
+    try {
+      const res = await fetch(apiUrl('/api/guards/send-login-otp'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guardId, pin })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGuardOtpPhone(data.phone || '');
+        setGuardName2fa(data.guardName || guardId);
+        setGuardOtp('');
+        setLoginStep('otp');
+        setOtpResendTimer(30);
+      } else {
+        setLoginError(data.error || 'Invalid Guard ID or PIN.');
+      }
+    } catch {
+      // Offline fallback — skip 2FA and login directly
+      const success = await loginGuard(guardId, pin, gateId);
+      if (!success) setLoginError('Invalid Guard ID or PIN. Please try again.');
+    }
+    setIsLoggingIn(false);
+  };
+
+  // Step 2: Verify WhatsApp OTP and complete login
+  const handleVerifyGuardOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (guardOtp.length < 6) {
+      setLoginError('Please enter the full 6-digit OTP code.');
+      return;
+    }
+    setLoginError('');
+    setIsLoggingIn(true);
+    try {
+      const res = await fetch(apiUrl('/api/guards/verify-login-otp'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guardId, pin, gateId, otp: guardOtp })
+      });
+      const data = await res.json();
+      if (res.ok && data.guard) {
+        // Replicate what loginGuard() does in AppContext
+        const success = await loginGuard(guardId, pin, gateId);
+        if (!success) setLoginError('Login failed after OTP. Please retry.');
+      } else {
+        setLoginError(data.error || 'Invalid or expired OTP code.');
+      }
+    } catch {
+      // Offline fallback
+      const success = await loginGuard(guardId, pin, gateId);
+      if (!success) setLoginError('Invalid Guard ID or PIN. Please try again.');
     }
     setIsLoggingIn(false);
   };
@@ -293,19 +356,46 @@ export const GuardPortal: React.FC = () => {
   if (!activeGuard || !activeDutySession) {
     return (
       <div className="min-h-screen bg-[#090d16] flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md space-y-5">
+
+          {/* Back Button */}
+          <button
+            onClick={() => {
+              if (loginStep === 'otp') {
+                setLoginStep('credentials');
+                setLoginError('');
+              } else if (onBack) {
+                onBack();
+              }
+            }}
+            className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <span>{loginStep === 'otp' ? 'Back to credentials' : 'Back to role selection'}</span>
+          </button>
 
           {/* Login Card */}
           <div className="glass-panel rounded-3xl p-8 space-y-6 border border-slate-800 shadow-2xl">
             <div className="text-center space-y-2">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center mx-auto shadow-xl shadow-emerald-600/20 ring-2 ring-white/10">
-                <Shield className="w-10 h-10 text-white" />
+              <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto shadow-xl ring-2 ring-white/10 ${
+                loginStep === 'otp'
+                  ? 'bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 shadow-blue-600/20'
+                  : 'bg-gradient-to-tr from-emerald-600 to-teal-500 shadow-emerald-600/20'
+              }`}>
+                {loginStep === 'otp'
+                  ? <KeyRound className="w-10 h-10 text-white animate-pulse" />
+                  : <Shield className="w-10 h-10 text-white" />}
               </div>
               <h1 className="text-2xl font-extrabold text-white tracking-tight">Guard Portal</h1>
-              <p className="text-sm text-slate-400">Authenticate to begin your duty shift</p>
+              <p className="text-sm text-slate-400">
+                {loginStep === 'otp'
+                  ? `Enter 2FA code sent to WhatsApp`
+                  : 'Authenticate to begin your duty shift'}
+              </p>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-4">
+            {/* STEP 1: CREDENTIALS */}
+            {loginStep === 'credentials' && <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Guard ID</label>
                 <div className="relative">
@@ -382,9 +472,83 @@ export const GuardPortal: React.FC = () => {
                 ) : (
                   <Shield className="w-4 h-4" />
                 )}
-                <span>{isLoggingIn ? 'Authenticating...' : 'Start Guard Duty Session'}</span>
+                <span>{isLoggingIn ? 'Verifying PIN...' : 'Send WhatsApp 2FA Code'}</span>
               </button>
-            </form>
+            </form>}
+
+            {/* STEP 2: WHATSAPP OTP VERIFICATION */}
+            {loginStep === 'otp' && (
+              <form onSubmit={handleVerifyGuardOtp} className="space-y-5">
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex items-start gap-3">
+                  <div className="h-8 w-8 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <MessageSquare className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div className="text-xs space-y-0.5">
+                    <div className="text-white font-semibold">
+                      Code sent to WhatsApp <span className="font-mono text-blue-400">+91 {guardOtpPhone}</span>
+                    </div>
+                    <p className="text-slate-400">Guard: <span className="text-slate-200 font-medium">{guardName2fa}</span>. Enter the 6-digit code to start duty.</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider text-center">
+                    6-Digit WhatsApp 2FA Code
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-4 top-3.5 w-5 h-5 text-emerald-400" />
+                    <input
+                      type="text"
+                      value={guardOtp}
+                      onChange={e => setGuardOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="• • • • • •"
+                      maxLength={6}
+                      autoFocus
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-2xl pl-12 pr-4 py-3.5 text-center text-2xl text-white font-mono tracking-[0.6em] focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                {loginError && (
+                  <div className="flex items-center gap-2 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>{loginError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isLoggingIn || guardOtp.length < 6}
+                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold text-sm rounded-xl shadow-xl shadow-emerald-600/25 transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isLoggingIn ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                  <span>{isLoggingIn ? 'Verifying 2FA...' : 'Verify & Start Duty Session'}</span>
+                </button>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setLoginStep('credentials'); setLoginError(''); }}
+                    className="text-slate-400 hover:text-white transition"
+                  >
+                    Change details
+                  </button>
+                  {otpResendTimer > 0 ? (
+                    <span className="text-slate-500 font-mono">Resend in <span className="text-emerald-400 font-bold">{otpResendTimer}s</span></span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleLogin as any}
+                      disabled={isLoggingIn}
+                      className="text-emerald-400 hover:text-emerald-300 font-semibold transition"
+                    >
+                      Resend 2FA Code
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
 
             <p className="text-center text-[11px] text-slate-500 font-mono">
               Demo: Guard ID <span className="text-emerald-400">G001</span> • PIN <span className="text-emerald-400">1234</span>

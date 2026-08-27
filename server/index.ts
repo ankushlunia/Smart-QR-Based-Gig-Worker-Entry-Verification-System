@@ -145,6 +145,58 @@ app.post('/api/auth/guard-login', (req, res) => {
   res.json(result);
 });
 
+// 6b. Guard 2FA: Verify PIN credentials, then send WhatsApp OTP
+app.post('/api/guards/send-login-otp', async (req, res) => {
+  const { guardId, pin } = req.body;
+  if (!guardId || !pin) {
+    return res.status(400).json({ error: 'Guard ID and PIN are required.' });
+  }
+
+  const data = db.get();
+  const guard = data.guards.find(
+    (g: any) => g.id.toLowerCase() === guardId.trim().toLowerCase() && g.pin === pin
+  );
+
+  if (!guard) {
+    return res.status(401).json({ error: 'Invalid Guard ID or PIN. Please try again.' });
+  }
+
+  const phone = guard.phone?.replace(/\D/g, '') || '';
+  if (phone.length < 10) {
+    return res.status(400).json({ error: 'No registered WhatsApp number found for this guard. Contact admin.' });
+  }
+
+  const otp = otpStore.generate(`guard_login_${guard.id}`);
+  await whatsappService.sendOTP(phone, otp);
+
+  res.json({
+    success: true,
+    guardName: guard.name,
+    phone,
+    message: `2FA code sent to WhatsApp +91 ${phone.slice(-10)}`
+  });
+});
+
+// 6c. Guard 2FA: Verify OTP and complete login
+app.post('/api/guards/verify-login-otp', (req, res) => {
+  const { guardId, pin, gateId, otp } = req.body;
+  if (!guardId || !pin || !otp) {
+    return res.status(400).json({ error: 'Guard ID, PIN, and OTP are required.' });
+  }
+
+  const isOtpValid = otpStore.verify(`guard_login_${guardId.trim()}`, otp.trim());
+  if (!isOtpValid) {
+    return res.status(400).json({ error: 'Invalid or expired 2FA OTP code. Please try again.' });
+  }
+
+  // Proceed with normal login
+  const result = db.loginGuard(guardId, pin, gateId);
+  if (result.error) return res.status(401).json(result);
+
+  broadcastStatsUpdate();
+  res.json(result);
+});
+
 // 7. QR Token Generation
 app.post('/api/qr/generate', (req, res) => {
   const { dutySessionId } = req.body;

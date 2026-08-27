@@ -169,7 +169,7 @@ const AppShell: React.FC = () => {
 
             {/* GUARD LOGIN + PORTAL */}
             {screen === 'guard-login' && (
-              <GuardPortal />
+              <GuardPortal onBack={() => setScreen('home')} />
             )}
 
             {/* OTHER / GIG WORKER PORTAL */}
