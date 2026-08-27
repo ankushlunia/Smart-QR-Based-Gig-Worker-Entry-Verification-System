@@ -173,6 +173,7 @@ app.post('/api/guards/send-login-otp', async (req, res) => {
     success: true,
     guardName: guard.name,
     phone,
+    demoOtp: otp,
     message: `2FA code sent to WhatsApp +91 ${phone.slice(-10)}`
   });
 });
@@ -490,6 +491,7 @@ app.post('/api/official/send-otp', async (req, res) => {
     success: true,
     targetPhone,
     officialName: match.name,
+    demoOtp: otp,
     message: `2FA Verification code sent to WhatsApp +91 ${targetPhone.slice(-10)}`
   });
 });
@@ -526,6 +528,7 @@ app.post('/api/official/forgot-password-otp', async (req, res) => {
 
   res.json({
     success: true,
+    demoOtp: otp,
     message: `Password reset OTP sent to WhatsApp +91 ${targetPhone.slice(-10)}`
   });
 });
@@ -567,6 +570,7 @@ app.post('/api/guards/forgot-pin-otp', async (req, res) => {
     guardId: guard ? guard.id : guardId,
     guardName: guard ? guard.name : 'Guard',
     phone: targetPhone,
+    demoOtp: otp,
     message: `Security PIN reset OTP dispatched to WhatsApp +91 ${targetPhone.slice(-10)}`
   });
 });

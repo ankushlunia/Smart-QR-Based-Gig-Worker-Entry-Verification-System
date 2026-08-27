@@ -26,6 +26,7 @@ export const GuardPortal: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [guardOtpPhone, setGuardOtpPhone] = useState('');
   const [guardName2fa, setGuardName2fa] = useState('');
   const [otpResendTimer, setOtpResendTimer] = useState(0);
+  const [guardDemoOtp, setGuardDemoOtp] = useState<string | null>(null);
 
   // QR State
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export const GuardPortal: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [resetPinStep, setResetPinStep] = useState<'request' | 'verify'>('request');
   const [resetPinLoading, setResetPinLoading] = useState(false);
   const [resetPinError, setResetPinError] = useState('');
+  const [guardResetDemoOtp, setGuardResetDemoOtp] = useState<string | null>(null);
 
   const handleSendGuardPinOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +71,7 @@ export const GuardPortal: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
       });
       const data = await res.json();
       if (res.ok) {
+        if (data.demoOtp) setGuardResetDemoOtp(data.demoOtp);
         setResetPinStep('verify');
         showToast(data.message || 'PIN reset code sent to WhatsApp', 'info');
       } else {
@@ -182,6 +185,7 @@ export const GuardPortal: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
       if (res.ok && data.success) {
         setGuardOtpPhone(data.phone || '');
         setGuardName2fa(data.guardName || guardId);
+        if (data.demoOtp) setGuardDemoOtp(data.demoOtp);
         setGuardOtp('');
         setLoginStep('otp');
         setOtpResendTimer(30);
@@ -508,6 +512,14 @@ export const GuardPortal: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                       className="w-full bg-slate-900 border border-slate-700 rounded-2xl pl-12 pr-4 py-3.5 text-center text-2xl text-white font-mono tracking-[0.6em] focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition shadow-inner"
                     />
                   </div>
+                  {guardDemoOtp && (
+                    <div className="mt-2 text-center">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold animate-pulse">
+                        <span>🔑 Demo OTP:</span>
+                        <span className="text-amber-200 tracking-widest text-sm">{guardDemoOtp}</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {loginError && (
@@ -631,6 +643,14 @@ export const GuardPortal: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                         autoFocus
                         className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2.5 text-center text-lg text-white font-mono tracking-[0.4em] focus:outline-none focus:border-emerald-500"
                       />
+                      {guardResetDemoOtp && (
+                        <div className="mt-1.5 text-center">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold animate-pulse">
+                            <span>🔑 Demo OTP:</span>
+                            <span className="text-amber-200 tracking-widest text-sm">{guardResetDemoOtp}</span>
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div>

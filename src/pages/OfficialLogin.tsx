@@ -28,6 +28,7 @@ export const OfficialLogin: React.FC<OfficialLoginProps> = ({ onLogin, onBack })
   const [otp, setOtp] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
   const [officialName, setOfficialName] = useState('Campus Security Official');
+  const [demoOtp, setDemoOtp] = useState<string | null>(null);
   
   // Reset Password Form State
   const [resetPhone, setResetPhone] = useState('9928388404');
@@ -36,6 +37,7 @@ export const OfficialLogin: React.FC<OfficialLoginProps> = ({ onLogin, onBack })
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [resetStep, setResetStep] = useState<'phone' | 'verify'>('phone');
   const [resetSuccessMsg, setResetSuccessMsg] = useState('');
+  const [demoResetOtp, setDemoResetOtp] = useState<string | null>(null);
   
   // UI states
   const [error, setError] = useState('');
@@ -71,6 +73,7 @@ export const OfficialLogin: React.FC<OfficialLoginProps> = ({ onLogin, onBack })
 
       if (res.ok) {
         if (data.officialName) setOfficialName(data.officialName);
+        if (data.demoOtp) setDemoOtp(data.demoOtp);
         setStep('otp');
         setOtp('');
         setResendTimer(30);
@@ -82,6 +85,7 @@ export const OfficialLogin: React.FC<OfficialLoginProps> = ({ onLogin, onBack })
         (username.toLowerCase() === 'admin' && password === 'admin123') ||
         (username.toLowerCase() === 'official' && password === 'official123')
       ) {
+        setDemoOtp(null);
         setStep('otp');
         setOtp('');
         setResendTimer(30);
@@ -152,6 +156,7 @@ export const OfficialLogin: React.FC<OfficialLoginProps> = ({ onLogin, onBack })
       });
       const data = await res.json();
       if (res.ok) {
+        if (data.demoOtp) setDemoResetOtp(data.demoOtp);
         setResetStep('verify');
         setResetOtp('');
         setResendTimer(30);
@@ -431,6 +436,15 @@ export const OfficialLogin: React.FC<OfficialLoginProps> = ({ onLogin, onBack })
                         className="w-full bg-slate-900 border border-slate-700 rounded-2xl pl-12 pr-4 py-3.5 text-center text-2xl text-white font-mono tracking-[0.6em] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition shadow-inner"
                       />
                     </div>
+
+                    {demoOtp && (
+                      <div className="mt-2 text-center">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold animate-pulse">
+                          <span>🔑 Demo OTP:</span>
+                          <span className="text-amber-200 tracking-widest text-sm">{demoOtp}</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {error && (
