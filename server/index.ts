@@ -250,6 +250,92 @@ app.patch('/api/drivers/:id/status', (req, res) => {
   res.json(driver);
 });
 
+// Suspended driver scanned QR — alert the guard and return suspended status
+app.post('/api/driver/suspended-scan', (req, res) => {
+  const { phone, tokenCode } = req.body;
+  if (!phone || !tokenCode) return res.status(400).json({ error: 'phone and tokenCode required' });
+
+  const data = db.get();
+  const driver = data.drivers.find((d: any) => d.phone?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+  if (!driver) return res.status(404).json({ error: 'Driver not found' });
+
+  if (driver.status !== 'SUSPENDED') {
+    return res.json({ suspended: false });
+  }
+
+  // Find which guard owns this QR token
+  const token = data.qrTokens?.find((t: any) => t.tokenCode === tokenCode);
+  const guardId = token?.guardId || null;
+
+  // Broadcast UNAUTHORIZED alert to all connected guard portals
+  const alertPayload = {
+    type: 'SUSPENDED_DRIVER_SCAN',
+    driver: {
+      id: driver.id,
+      name: driver.name,
+      phone: driver.phone,
+      vehicleNumber: driver.vehicleNumber,
+      complaintCount: driver.complaintCount
+    },
+    tokenCode,
+    gateName: token?.gateName || 'Unknown Gate',
+    timestamp: new Date().toISOString()
+  };
+
+  io.emit('suspended_driver_alert', alertPayload);
+  if (guardId) {
+    io.to(`guard_${guardId}`).emit('guard_driver_alert_suspended', alertPayload);
+  }
+
+  res.json({
+    suspended: true,
+    driverName: driver.name,
+    vehicleNumber: driver.vehicleNumber,
+    complaintCount: driver.complaintCount,
+    message: 'Your account has been suspended. Please file a reinstatement request.'
+  });
+});
+
+// Driver files a reinstatement request (complaint to admin)
+app.post('/api/driver/reinstatement-request', (req, res) => {
+  const { driverPhone, driverName, vehicleNumber, reason } = req.body;
+  if (!driverPhone || !reason) {
+    return res.status(400).json({ error: 'driverPhone and reason are required.' });
+  }
+
+  const data = db.get();
+  const driver = data.drivers.find((d: any) => d.phone?.replace(/\D/g, '') === driverPhone.replace(/\D/g, ''));
+
+  const reinstatementId = `reinstate_${Date.now()}`;
+  const complaint: any = {
+    id: reinstatementId,
+    type: 'REINSTATEMENT_REQUEST',
+    driverId: driver?.id || `unknown_${driverPhone}`,
+    driverName: driverName || driver?.name || 'Unknown',
+    driverPhone,
+    vehicleNumber: vehicleNumber || driver?.vehicleNumber || 'N/A',
+    reason,
+    status: 'PENDING',
+    createdAt: new Date().toISOString(),
+    resolvedAt: null,
+    resolutionNote: null
+  };
+
+  if (!data.complaints) data.complaints = [];
+  data.complaints.unshift(complaint);
+  db.save(data);
+  broadcastStatsUpdate();
+
+  // Notify admin dashboard
+  io.emit('reinstatement_request', complaint);
+
+  res.status(201).json({
+    success: true,
+    requestId: reinstatementId,
+    message: 'Your reinstatement request has been filed. Admin will review it shortly.'
+  });
+});
+
 // 11. Driver Entry Submission (Driver side)
 app.post('/api/entry/submit', (req, res) => {
   const { tokenCode, phone, name, vehicleNumber, vehicleType, company, selfieUrl, lat, lng, locationVerified } = req.body;

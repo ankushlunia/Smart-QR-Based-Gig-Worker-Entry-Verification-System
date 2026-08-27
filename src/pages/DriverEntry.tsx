@@ -9,7 +9,7 @@ import { io } from 'socket.io-client';
 import { Driver, DeliveryCompany, VehicleType } from '../types';
 import { apiUrl, getSocketUrl } from '../utils/api';
 
-type Step = 'validate' | 'phone' | 'register' | 'selfie' | 'company' | 'review' | 'waiting' | 'approved' | 'error';
+type Step = 'validate' | 'phone' | 'register' | 'selfie' | 'company' | 'review' | 'waiting' | 'approved' | 'error' | 'suspended';
 
 const COMPANIES: DeliveryCompany[] = ['Swiggy', 'Zomato', 'Amazon', 'Uber', 'Ola', 'Blinkit', 'Zepto', 'Porter', 'Delhivery', 'Other'];
 
@@ -64,6 +64,10 @@ export const DriverEntry: React.FC = () => {
   const [submittedEntryId, setSubmittedEntryId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [suspendedInfo, setSuspendedInfo] = useState<{ name: string; vehicle: string; complaints: number } | null>(null);
+  const [reinstatementReason, setReinstatementReason] = useState('');
+  const [reinstatementSubmitted, setReinstatementSubmitted] = useState(false);
+  const [reinstatementLoading, setReinstatementLoading] = useState(false);
 
   // Camera Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -120,6 +124,28 @@ export const DriverEntry: React.FC = () => {
         setTokenInfo(data.token);
         setTokenCode(code);
         
+        // Check if the saved/logged-in driver is SUSPENDED
+        const driverToCheck = savedDriver || driver;
+        if (driverToCheck?.phone) {
+          try {
+            const suspendRes = await fetch(apiUrl('/api/driver/suspended-scan'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: driverToCheck.phone, tokenCode: code })
+            });
+            const suspendData = await suspendRes.json();
+            if (suspendData.suspended) {
+              setSuspendedInfo({
+                name: suspendData.driverName || driverToCheck.name,
+                vehicle: suspendData.vehicleNumber || driverToCheck.vehicleNumber,
+                complaints: suspendData.complaintCount || 0
+              });
+              setCurrentStep('suspended');
+              return;
+            }
+          } catch { /* continue normally if check fails */ }
+        }
+
         // Auto-skip phone & registration if driver is already registered/saved
         if (savedDriver || (driver && name && phone)) {
           setCurrentStep('selfie');
@@ -143,6 +169,25 @@ export const DriverEntry: React.FC = () => {
       const res = await fetch(apiUrl(`/api/driver/lookup/${phone}`));
       if (res.ok) {
         const d: Driver = await res.json();
+
+        // Check suspension before proceeding
+        if (d.status === 'SUSPENDED') {
+          // Alert the guard
+          try {
+            await fetch(apiUrl('/api/driver/suspended-scan'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: d.phone, tokenCode })
+            });
+          } catch { /* non-blocking */ }
+          setSuspendedInfo({ name: d.name, vehicle: d.vehicleNumber, complaints: d.complaintCount });
+          setPhone(d.phone);
+          setName(d.name);
+          setVehicleNumber(d.vehicleNumber);
+          setCurrentStep('suspended');
+          return;
+        }
+
         setDriver(d);
         setSavedDriver(d);
         setName(d.name);
@@ -704,6 +749,118 @@ export const DriverEntry: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-600">Thank you! Drive safely on campus. 🙏</p>
+          </div>
+        )}
+
+        {/* ──── STEP: SUSPENDED ──── */}
+        {currentStep === 'suspended' && (
+          <div className="glass-panel rounded-2xl p-8 space-y-6 border border-red-500/40 text-center animate-fadeIn">
+            {/* Icon */}
+            <div className="relative mx-auto w-24 h-24">
+              <div className="w-24 h-24 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center">
+                <AlertTriangle className="w-12 h-12 text-red-400" />
+              </div>
+              <span className="absolute -bottom-1 -right-1 text-2xl">🚫</span>
+            </div>
+
+            {/* Status */}
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-xs text-red-400 font-bold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                Account Suspended
+              </div>
+              <h2 className="font-extrabold text-xl text-white">Access Denied</h2>
+              <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+                Hi <strong className="text-white">{suspendedInfo?.name || name}</strong>, your account has been
+                <span className="text-red-400 font-semibold"> suspended by the campus admin</span>.
+                You cannot enter the campus until your account is reinstated.
+              </p>
+            </div>
+
+            {/* Driver Info */}
+            <div className="bg-slate-900/80 rounded-xl p-4 space-y-2 text-left border border-slate-800">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Vehicle</span>
+                <span className="text-white font-mono">{suspendedInfo?.vehicle || vehicleNumber || '—'}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Past Complaints</span>
+                <span className="text-red-400 font-bold">{suspendedInfo?.complaints ?? 0} complaint(s)</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Status</span>
+                <span className="text-red-400 font-bold uppercase">Suspended</span>
+              </div>
+            </div>
+
+            {/* Guard Alert Notice */}
+            <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-left">
+              <Radio className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0 animate-ping" />
+              <p className="text-xs text-amber-300">
+                The gate guard has been <strong>automatically notified</strong> of this unauthorized scan attempt. Please do not proceed further.
+              </p>
+            </div>
+
+            {/* Reinstatement Form */}
+            <div className="border-t border-slate-800 pt-5 space-y-3">
+              {!reinstatementSubmitted ? (
+                <>
+                  <p className="text-xs text-slate-400 font-semibold">File a Reinstatement Request</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Explain why your suspension should be removed. The campus admin will review your request.
+                  </p>
+                  <textarea
+                    value={reinstatementReason}
+                    onChange={e => setReinstatementReason(e.target.value)}
+                    placeholder="Describe your situation and why your suspension should be lifted..."
+                    rows={3}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white resize-none placeholder:text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 text-left"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!reinstatementReason.trim()) return;
+                      setReinstatementLoading(true);
+                      try {
+                        const res = await fetch(apiUrl('/api/driver/reinstatement-request'), {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            driverPhone: phone || suspendedInfo?.vehicle,
+                            driverName: name || suspendedInfo?.name,
+                            vehicleNumber: vehicleNumber || suspendedInfo?.vehicle,
+                            reason: reinstatementReason
+                          })
+                        });
+                        if (res.ok || res.status === 201) {
+                          setReinstatementSubmitted(true);
+                        }
+                      } catch {
+                        setReinstatementSubmitted(true); // optimistic success
+                      } finally {
+                        setReinstatementLoading(false);
+                      }
+                    }}
+                    disabled={!reinstatementReason.trim() || reinstatementLoading}
+                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm rounded-xl shadow-xl transition active:scale-[0.98] disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    {reinstatementLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                    <span>{reinstatementLoading ? 'Submitting...' : 'Submit Reinstatement Request'}</span>
+                  </button>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-3">
+                  <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-emerald-400 text-sm">Request Submitted!</p>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      Your reinstatement request has been filed. The campus admin will review it and notify you. Please wait at the gate.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
