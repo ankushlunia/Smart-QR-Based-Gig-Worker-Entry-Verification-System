@@ -451,6 +451,15 @@ app.post('/api/demo/simulate-entry', (req, res) => {
 });
 
 // 20. WhatsApp Gateway Status & QR Endpoint
+app.get('/api/whatsapp/status', (req, res) => {
+  res.json(whatsappClient.getState());
+});
+
+app.post('/api/whatsapp/generate-qr', async (req, res) => {
+  const result = await whatsappClient.generateQR();
+  res.json(result);
+});
+
 app.post('/api/whatsapp/pairing-code', async (req, res) => {
   const { phone } = req.body;
   const result = await whatsappClient.getPairingCode(phone || '9928388404');

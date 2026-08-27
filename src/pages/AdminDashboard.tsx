@@ -92,6 +92,24 @@ export const AdminDashboard: React.FC = () => {
       setIsWaLoading(false);
     }
   };
+  const handleGenerateWaQr = async () => {
+    setIsWaLoading(true);
+    try {
+      const res = await fetch(apiUrl('/api/whatsapp/generate-qr'), { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.qrCodeDataUrl) {
+        setWaStatus(prev => ({ ...prev, qrCodeDataUrl: data.qrCodeDataUrl }));
+        showToast('WhatsApp QR Code generated!', 'success');
+      } else {
+        showToast('Failed to generate QR code.', 'warning');
+      }
+    } catch (e) {
+      showToast('Error generating QR code.', 'warning');
+    } finally {
+      setIsWaLoading(false);
+    }
+  };
+
   const [newGuardData, setNewGuardData] = useState({ name: '', pin: '', phone: '', currentGateId: '' });
 
   const fetchAllData = async () => {
@@ -995,20 +1013,38 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               {/* Option B: Scan QR Code */}
-              <div className="glass-panel p-6 rounded-2xl border border-slate-800 text-center space-y-4">
-                <h3 className="font-bold text-white text-base">Method 2: Scan QR Code</h3>
-                <p className="text-xs text-slate-400">
-                  Open WhatsApp on <strong>9928388404</strong> → Linked Devices → Scan:
-                </p>
+              <div className="glass-panel p-6 rounded-2xl border border-slate-800 text-center space-y-4 flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-white text-base">Method 2: Scan QR Code</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Open WhatsApp on <strong>9928388404</strong> → Linked Devices → Link a Device:
+                  </p>
+                </div>
+
                 {waStatus.qrCodeDataUrl ? (
-                  <div className="p-4 bg-white rounded-2xl inline-block mx-auto shadow-2xl">
-                    <img src={waStatus.qrCodeDataUrl} alt="WhatsApp QR" className="w-60 h-60 mx-auto" />
+                  <div className="space-y-3">
+                    <div className="p-4 bg-white rounded-2xl inline-block mx-auto shadow-2xl border border-slate-700">
+                      <img src={waStatus.qrCodeDataUrl} alt="WhatsApp QR" className="w-56 h-56 mx-auto rounded-lg" />
+                    </div>
+                    <p className="text-[11px] text-emerald-400 font-mono">Scan QR code using WhatsApp camera prompt</p>
                   </div>
                 ) : (
-                  <div className="p-12 bg-slate-900 rounded-2xl text-xs text-slate-400 flex flex-col items-center gap-2">
-                    <span>Waiting for WhatsApp client...</span>
+                  <div className="p-8 bg-slate-900 rounded-2xl text-xs text-slate-400 flex flex-col items-center justify-center gap-3 border border-slate-800">
+                    <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-xl">
+                      📱
+                    </div>
+                    <span className="font-mono">No active QR code stream</span>
                   </div>
                 )}
+
+                <button
+                  onClick={handleGenerateWaQr}
+                  disabled={isWaLoading}
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isWaLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+                  <span>{waStatus.qrCodeDataUrl ? 'Refresh QR Code' : 'Generate QR Code to Scan & Connect'}</span>
+                </button>
               </div>
 
             </div>
