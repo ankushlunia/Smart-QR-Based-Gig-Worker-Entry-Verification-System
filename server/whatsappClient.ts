@@ -127,22 +127,43 @@ export const whatsappClient = {
 
   getPairingCode: async (phone: string = '9928388404'): Promise<{ code?: string; error?: string }> => {
     const clean = phone.replace(/\D/g, '');
-    const full = clean.startsWith('91') && clean.length > 10 ? clean : `91${clean}`;
+    const full = clean.startsWith('91') && clean.length > 10 ? clean : (clean.length === 10 ? `91${clean}` : clean);
     
-    if (!socket) {
-      return { error: 'WhatsApp service is initializing... please wait 2 seconds.' };
-    }
-
     try {
-      if (!socket.authState.creds.registered) {
+      // Ensure clean socket state before requesting code
+      if (!socket || socket?.ws?.readyState !== 1) {
+        if (socket) {
+          try { socket.ev.removeAllListeners(); socket.end(undefined); } catch (e) {}
+        }
+        await initWhatsAppClient();
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      if (socket && socket.requestPairingCode) {
         const code = await socket.requestPairingCode(full);
         state.pairingCode = code;
         console.log(`\n🔑 [WHATSAPP PAIRING CODE for +${full}]: ${code}\n`);
         return { code };
       } else {
-        return { error: 'WhatsApp is already linked.' };
+        return { error: 'WhatsApp client is initializing. Please try clicking again in 2 seconds.' };
       }
     } catch (e: any) {
+      console.error('Error requesting pairing code:', e);
+      // Fallback reset & retry
+      try {
+        if (fs.existsSync(AUTH_DIR)) {
+          fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        }
+        await initWhatsAppClient();
+        await new Promise(r => setTimeout(r, 1500));
+        if (socket && socket.requestPairingCode) {
+          const code = await socket.requestPairingCode(full);
+          state.pairingCode = code;
+          return { code };
+        }
+      } catch (retryErr: any) {
+        return { error: retryErr.message || 'Failed to generate pairing code' };
+      }
       return { error: e.message || 'Failed to generate pairing code' };
     }
   },

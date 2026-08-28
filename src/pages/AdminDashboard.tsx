@@ -967,49 +967,81 @@ export const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
               {/* Option A: 8-digit Pairing Code */}
-              <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-white text-base">Method 1: Link with Phone Number (Recommended)</h3>
-                  <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-mono font-bold">Zero Camera Scan</span>
-                </div>
-                
-                <ol className="text-xs text-slate-400 space-y-2 list-decimal pl-4 font-mono">
-                  <li>Open WhatsApp on phone <strong>+91 9928388404</strong></li>
-                  <li>Tap <strong>Settings</strong> → <strong>Linked Devices</strong> → <strong>Link a Device</strong></li>
-                  <li>Tap <strong>"Link with phone number instead"</strong> at the bottom of the screen</li>
-                  <li>Enter the 8-character pairing code below:</li>
-                </ol>
-
-                {waPairingCode ? (
-                  <div className="p-4 bg-slate-900 rounded-2xl border-2 border-emerald-500/40 text-center space-y-2">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Pairing Code</span>
-                    <div className="text-3xl font-black text-amber-400 font-mono tracking-widest bg-slate-950 py-2.5 rounded-xl border border-slate-800">
-                      {waPairingCode}
-                    </div>
-                    <p className="text-[11px] text-emerald-400 font-mono">
-                      Type this code in your phone's WhatsApp prompt now.
-                    </p>
+              <div className="glass-panel p-6 rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-slate-900 via-slate-900 to-emerald-950/20 space-y-5 flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-white text-base flex items-center gap-2">
+                      <span className="text-xl">⚡</span>
+                      <span>Method 1: Link with Phone Number</span>
+                    </h3>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider">
+                      ★ Recommended (Instant)
+                    </span>
                   </div>
-                ) : (
-                  <div className="space-y-3 pt-2">
+                  
+                  <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2.5 text-xs text-slate-300 font-mono">
+                    <div className="flex items-start gap-2">
+                      <span className="bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded text-[10px]">1</span>
+                      <span>Open WhatsApp on phone <strong>+91 {waPhoneToLink}</strong></span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded text-[10px]">2</span>
+                      <span>Go to <strong>Settings</strong> → <strong>Linked Devices</strong> → <strong>Link a Device</strong></span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded text-[10px]">3</span>
+                      <span>Tap <strong className="text-amber-300">"Link with phone number instead"</strong> at bottom</span>
+                    </div>
+                  </div>
+
+                  {waPairingCode ? (
+                    <div className="p-4 bg-slate-950 rounded-2xl border-2 border-emerald-500/40 text-center space-y-3 shadow-xl">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 uppercase font-bold tracking-widest px-1">
+                        <span>WhatsApp 8-Character Code</span>
+                        <span className="text-emerald-400 animate-pulse">● Active</span>
+                      </div>
+                      <div className="text-3xl font-black text-amber-400 font-mono tracking-[0.3em] bg-slate-900 py-3 px-4 rounded-xl border border-slate-800 flex items-center justify-center gap-3">
+                        <span>{waPairingCode.length === 8 ? `${waPairingCode.slice(0, 4)}-${waPairingCode.slice(4)}` : waPairingCode}</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(waPairingCode);
+                            showToast('Pairing code copied to clipboard!', 'success');
+                          }}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 rounded-lg transition"
+                          title="Copy Code"
+                        >
+                          📋 Copy
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-emerald-400 font-mono">
+                        Type this code in your phone prompt to link instantly without camera scanning.
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  {!waPairingCode && (
                     <div>
-                      <label className="block text-slate-400 text-xs font-mono mb-1">Phone Number to Connect:</label>
+                      <label className="block text-slate-400 text-xs font-mono mb-1.5">WhatsApp Registered Mobile Number:</label>
                       <input
                         type="text"
                         value={waPhoneToLink}
                         onChange={e => setWaPhoneToLink(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm"
+                        placeholder="10-digit phone number"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-mono text-sm focus:border-emerald-500 focus:outline-none"
                       />
                     </div>
-                    <button
-                      onClick={handleGetWaPairingCode}
-                      disabled={isWaLoading}
-                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
-                    >
-                      <span>Generate 8-Character Pairing Code</span>
-                    </button>
-                  </div>
-                )}
+                  )}
+                  <button
+                    onClick={handleGetWaPairingCode}
+                    disabled={isWaLoading}
+                    className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold rounded-xl text-xs transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25"
+                  >
+                    {isWaLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    <span>{waPairingCode ? 'Generate New Pairing Code' : 'Generate 8-Character Pairing Code'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Option B: Scan QR Code */}
